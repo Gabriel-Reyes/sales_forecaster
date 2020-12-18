@@ -62,35 +62,26 @@ monthly['6 Months Ago'] = monthly.groupby(['Family', 'Brand', 'Size'])['Cases So
 monthly['Last Year'] = monthly.groupby(['Month', 'Family', 'Brand', 'Size'])['Cases Sold'].shift()
 
 
-# building sliding window validation to evaluate last 3 time periods fitted against previous historical data
+# building sliding window validation to evaluate last X time periods fitted against previous historical data
 
-def x_months_ago(df, date_col, x_months_ago):
-    lower_bound = (pd.Timestamp.today() - pd.DateOffset(months=(x_months_ago + 1))).to_period('M')
-    upper_bound = (pd.Timestamp.today() - pd.DateOffset(months=(x_months_ago - 1))).to_period('M')
-    month = df[(df[date_col] > lower_bound) & (df[date_col] < upper_bound)]
-    return month.dropna()
+def sliding_windows(df, date_col, target, dtypes, num_windows):
+    windows = {}
 
-train = monthly[monthly['Delivery Date'] < (pd.Timestamp.today() - pd.DateOffset(months=3)).to_period('M')]
+    for i in range(num_windows, 0, -1):
 
-train = train.select_dtypes(include=['int64', 'float64']).dropna()
+        target_month = (pd.Timestamp.today() - pd.DateOffset(months=(i))).to_period('M')
+        window = df[df[date_col] == target_month].select_dtypes(include=dtypes).dropna()
+        prior = df[df[date_col] < target_month].select_dtypes(include=dtypes).dropna()
 
-X_train = train.drop('Cases Sold', axis=1)
-y_train = train['Cases Sold']
+        X_train, y_train = prior.drop(target, axis=1), prior[target]
+        X_test, y_test = window.drop(target, axis=1), window[target]
 
-sep_2020 = x_months_ago(monthly, 'Delivery Date', 3)
-oct_2020 = x_months_ago(monthly, 'Delivery Date', 2)
-nov_2020 = x_months_ago(monthly, 'Delivery Date', 1)
+        windows[i] = {'X_train':X_train, 'y_train':y_train, 'X_test':X_test, 'y_test':y_test}
 
-sep_2020_X = sep_2020.select_dtypes(include=['int64', 'float64']).drop('Cases Sold', axis=1)
-sep_2020_y = sep_2020['Cases Sold']
+    return windows
 
-oct_2020_X = oct_2020.select_dtypes(include=['int64', 'float64']).drop('Cases Sold', axis=1)
-oct_2020_y = oct_2020['Cases Sold']
 
-nov_2020_X = nov_2020.select_dtypes(include=['int64', 'float64']).drop('Cases Sold', axis=1)
-nov_2020_y = nov_2020['Cases Sold']
-
-months = {'3 Months Ago':[sep_2020_X, sep_2020_y], '2 Months Ago':[oct_2020_X, oct_2020_y], '1 Month Ago':[nov_2020_X, nov_2020_y]}
+months = sliding_windows(monthly, 'Delivery Date', 'Cases Sold', ['int64', 'float64'], 6)
 
 
 # list of ML models to test
@@ -104,17 +95,48 @@ xgb = XGBRegressor()
 models = {'K-Nearest Neighbors':knn, 'Linear Regression':lr, 'Random Forest Regressor':rfr, 'Neural Network':mlp, 'XG Boost':xgb}
 
 
-# finalizing model data, excluding object columns
+# predictor currently set for current month: iterating through models and sliding window validation 
 
 predictions = {}
 
 for model in models:
+
     predictions[model] = {}
-    models[model].fit(X_train, y_train)
 
     for month in months:
+
         predictions[model][month] = {}
-        predictions[model][month]['Predictions'] = models[model].predict(months[month][0])
-        predictions[model][month]['Mean Absolute Error'] = mean_absolute_error(months[month][1], predictions[model][month]['Predictions'])
-        predictions[model][month]['Mean Squared Error'] = mean_squared_error(months[month][1], predictions[model][month]['Predictions'])
-        predictions[model][month]['R2 Score'] = r2_score(months[month][1], predictions[model][month]['Predictions'])
+        
+        models[model].fit(months[month]['X_train'], months[month]['y_train'])
+        predictions[model][month]['Predictions'] = models[model].predict(months[month]['X_test'])
+        predictions[model][month]['Mean Absolute Error'] = mean_absolute_error(months[month]['y_test'], predictions[model][month]['Predictions'])
+        predictions[model][month]['Mean Squared Error'] = mean_squared_error(months[month]['y_test'], predictions[model][month]['Predictions'])
+        predictions[model][month]['R2 Score'] = r2_score(months[month]['y_test'], predictions[model][month]['Predictions'])
+
+
+# scores for predictor by X windows selected
+
+for model in predictions:
+    print(model)
+    print('-'*30)
+
+    for month in predictions[model]:
+        print('Window: Current Month Minus', month)
+        print('-'*10)
+        print('MAE:', predictions[model][month]['Mean Absolute Error'])
+        print('MSE:', predictions[model][month]['Mean Squared Error'])
+        print('R2:', predictions[model][month]['R2 Score'])
+        print('\n')
+
+
+# baseline score that model must outperform: previous month's sales
+
+for month in months:
+    print('Baseline Estimator')
+    print('-'*10)
+    print('Window: Current Month Minus', month)
+    print('-'*10)
+    print('MAE:', mean_absolute_error(months[month]['y_test'], months[month]['X_test']['Last Month']))
+    print('MSE:', mean_squared_error(months[month]['y_test'], months[month]['X_test']['Last Month']))
+    print('R2:', r2_score(months[month]['y_test'], months[month]['X_test']['Last Month']))
+    print('\n')
