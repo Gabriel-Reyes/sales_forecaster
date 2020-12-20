@@ -1,6 +1,8 @@
 # sales_forecaster
 
-Time series forecaster designed to predict monthly sales. Data is looped through list of classic ML models to determine best fit.
+Time series forecaster designed to predict monthly sales.
+
+Hyperparameter optimization and sliding window vaidatior allows for model evaluation on X new time periods to determine best model for future time periods.
 
 Current models:
 
@@ -11,5 +13,3 @@ Current models:
 - XGBoost
 
 Current build allows for entire list of unique products to be evaluated without neededing to filter by product.
-
-Future pieces will include categorical variable assessment and hyperparameter optimization. 
