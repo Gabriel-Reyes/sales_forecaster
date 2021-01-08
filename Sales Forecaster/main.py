@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 from sklearn.base import clone
-from sklearn.model_selection import GridSearchCV
+from sklearn.model_selection import GridSearchCV, RandomizedSearchCV
 
 from sklearn.neighbors import KNeighborsRegressor
 from sklearn.linear_model import LinearRegression
@@ -101,7 +101,7 @@ def sliding_windows(df, date_col, target, dtypes, num_windows):
     return windows
 
 
-months = sliding_windows(two_months_out, 'Delivery Date', 'Cases Sold', ['int64', 'float64'], 6)
+months = sliding_windows(next_month, 'Delivery Date', 'Cases Sold', ['int64', 'float64'], 6)
 
 
 # list of ML models to test with parameters for tuning
@@ -112,22 +112,22 @@ rfr = RandomForestRegressor()
 mlp = MLPRegressor()
 xgb = XGBRegressor()
 
-models = {'K-Nearest Neighbors':{'model':knn, 'parameters':{'n_neighbors': [75],
+model_list = {'K-Nearest Neighbors':{'model':knn, 'parameters':{'n_neighbors': [65, 75, 85],
                                                             'weights': ['uniform'],
                                                             'algorithm': ['auto'],
-                                                            'leaf_size': [15],
+                                                            'leaf_size': [45],
                                                             'p': [2],
-                                                            'n_jobs': [1]}},
+                                                            'n_jobs': [-1]}},
 
          'Linear Regression':{'model':lr, 'parameters':{'fit_intercept': [True],
                                                          'normalize': [False],
                                                          'n_jobs': [None]}},
 
-        'Random Forest Regressor':{'model':rfr, 'parameters':{'n_estimators': [100],
+        'Random Forest Regressor':{'model':rfr, 'parameters':{'n_estimators': [200],
                                                                 'criterion': ['mse'],
                                                                 'max_depth': [None],
                                                                 'min_samples_split': [2],
-                                                                'min_samples_leaf': [1],
+                                                                'min_samples_leaf': [2],
                                                                 'min_weight_fraction_leaf': [0.0],
                                                                 'max_features': ['auto'],
                                                                 'max_leaf_nodes': [None],
@@ -135,14 +135,14 @@ models = {'K-Nearest Neighbors':{'model':knn, 'parameters':{'n_neighbors': [75],
                                                                 'min_impurity_split': [None],
                                                                 'bootstrap': [True],
                                                                 'oob_score': [False],
-                                                                'n_jobs': [None],
+                                                                'n_jobs': [-1],
                                                                 'random_state': [None],
                                                                 'verbose': [0],
                                                                 'warm_start': [False],
                                                                 'ccp_alpha': [0.0],
                                                                 'max_samples': [None]}},
                                                                 
-        'Neural Network':{'model':mlp, 'parameters':{'hidden_layer_sizes': [(100,)],
+        'Neural Network':{'model':mlp, 'parameters':{'hidden_layer_sizes': [(100,)], # best: (50,50,50)
                                                         'activation': ['relu'],
                                                         'solver': ['adam'],
                                                         'alpha': [0.0001],
@@ -165,8 +165,8 @@ models = {'K-Nearest Neighbors':{'model':knn, 'parameters':{'n_neighbors': [75],
                                                         'n_iter_no_change': [10],
                                                         'max_fun': [15000]}},
         
-        'XG Boost':{'model':xgb, 'parameters':{'n_estimators': [100],
-                                                'max_depth': [6],
+        'XG Boost':{'model':xgb, 'parameters':{'n_estimators': [200],
+                                                'max_depth': [8],
                                                 'learning_rate': [0.3],
                                                 'verbosity': [1],
                                                 'booster': ['gbtree'],
@@ -187,13 +187,17 @@ models = {'K-Nearest Neighbors':{'model':knn, 'parameters':{'n_neighbors': [75],
                                                 'num_parallel_tree': [1],
                                                 'importance_type': ['gain']}}}
 
+selected_models = ['K-Nearest Neighbors']
 
-# hyperparameter optimization using GridSearchCV, best parameters are reassigned 
+models = dict((key, model_list[key]) for key in selected_models)
+
+
+# hyperparameter optimization using GridSearchCV or RandomizedSearchCV
 
 param_results = {}
 
 for model in models:
-    clf = GridSearchCV(models[model]['model'], models[model]['parameters'])
+    clf = RandomizedSearchCV(models[model]['model'], models[model]['parameters']) #component to change search function
     clf.fit(months[1]['X_train'], months[1]['y_train'])
     models[model]['model'] = clone(clf.best_estimator_)
     
@@ -241,7 +245,7 @@ for model in predictions:
 # baseline estimator that model must outperform: previous month's sales
 
 for month in months:
-    most_recent_sales_data = '3 Months Ago'
+    most_recent_sales_data = '2 Months Ago'
     print('Baseline Estimator')
     print('-'*10)
     print('Window: Current Month Minus', month)
