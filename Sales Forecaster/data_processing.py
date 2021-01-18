@@ -78,7 +78,6 @@ monthly = monthly.fillna(0)
 monthly['Cases Sold'] = (np.where(monthly['Delivery Date'] < monthly['First Sale'], np.nan, monthly['Cases Sold']))
 
 
-
 # adding on all previous month data
 
 monthly['Last Month'] = monthly.groupby(['Brand', 'Family', 'Size'])['Cases Sold'].shift(-1)
@@ -94,6 +93,13 @@ monthly['9 Months Ago'] = monthly.groupby(['Brand', 'Family', 'Size'])['Cases So
 monthly['10 Months Ago'] = monthly.groupby(['Brand', 'Family', 'Size'])['Cases Sold'].shift(-10)
 monthly['11 Months Ago'] = monthly.groupby(['Brand', 'Family', 'Size'])['Cases Sold'].shift(-11)
 monthly['Last Year'] = monthly.groupby(['Brand', 'Family', 'Size'])['Cases Sold'].shift(-12)
+
+
+# adding on std dev
+
+std_devs = monthly.groupby(['Brand', 'Family', 'Size'])['Cases Sold'].agg(np.std).reset_index().rename(columns={'Cases Sold':'Std'})
+
+monthly = monthly.merge(std_devs, how='left', on=['Family', 'Size'])
 
 
 # creating dataframes for predicting X months out

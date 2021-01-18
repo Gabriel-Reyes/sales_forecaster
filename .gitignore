@@ -129,3 +129,4 @@ dmypy.json
 .pyre/
 test
 historical_sales.csv
+Sales Forecaster/test.db
